@@ -1,0 +1,12 @@
+--- a/sysbox-fs/domain/process.go	2026-06-19 13:19:45.910785285 +0200
++++ b/sysbox-fs/domain/process.go	2026-06-19 13:19:45.933785307 +0200
+@@ -74,6 +74,9 @@
+ 
+ // ProcessNsMatch returns true if the given processes are in the same namespaces.
+ func ProcessNsMatch(p1, p2 ProcessIface) bool {
++	if p1 == nil || p2 == nil {
++		return false
++	}
+ 	p1Inodes, p1Err := p1.NsInodes()
+ 	p2Inodes, p2Err := p2.NsInodes()
+ 

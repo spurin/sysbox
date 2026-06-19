@@ -1,0 +1,67 @@
+# diveinto-labd: build patched sysbox-ce debs (amd64 + arm64) and publish them
+# as release assets. Mirrors the upstream manual sysbox-pkgr build (nestybox
+# ships no CI), with the #1003 ProcessNsMatch nil-guard applied so sysbox-fs
+# survives kernel 7.0 (Ubuntu 26.04) container-init sysctl writes.
+name: build-patched-deb
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout fork (recursive submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          path: sysbox
+
+      - name: Apply diveinto patches
+        working-directory: sysbox
+        run: |
+          set -eux
+          for p in patches/*.patch; do echo "applying $p"; patch -p1 < "$p"; done
+          grep -A3 'func ProcessNsMatch' sysbox-fs/domain/process.go
+          echo "building VERSION=$(cat VERSION) arch=${{ matrix.arch }}"
+
+      - name: Build sysbox-ce deb via sysbox-pkgr
+        run: |
+          set -eux
+          git clone --depth 1 https://github.com/nestybox/sysbox-pkgr.git sysbox-pkgr
+          mkdir -p sysbox-pkgr/deb/sources
+          tar -C "$GITHUB_WORKSPACE" \
+            --exclude='sysbox/.git' --exclude='sysbox/sysbox-pkgr' \
+            -czf sysbox-pkgr/deb/sources/sysbox.tgz sysbox
+          make -C sysbox-pkgr/deb ubuntu-jammy EDITION=ce
+
+      - name: Locate built deb
+        id: deb
+        run: |
+          set -eux
+          DEB="$(ls "$GITHUB_WORKSPACE"/sysbox-pkgr/deb/build/*/ubuntu-jammy/*.deb | head -1)"
+          test -n "$DEB"
+          echo "file=$DEB" >> "$GITHUB_OUTPUT"
+
+      - name: Publish deb to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.deb.outputs.file }}
+          body: |
+            Patched sysbox-ce build for the diveinto-labd fleet.
+            Base: upstream nestybox/sysbox v0.7.0 + #1003 ProcessNsMatch nil-guard
+            (deterministic sysbox-fs panic on kernel 7.0 / Ubuntu 26.04).
+            Assets: amd64 + arm64 debs (sysbox-ce_<version>.linux_<arch>.deb).

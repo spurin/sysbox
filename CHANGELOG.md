@@ -1,6 +1,10 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [0.7.1] - 2026-06-19
+### Fixed
+* diveinto-labd fork: guard sysbox-fs `ProcessNsMatch` against a nil process (nestybox/sysbox#1003). On Linux 7.0 (Ubuntu 26.04) every container-init sysctl write carries the KILL_SUIDGID flag, making the pre-existing nil-deref fire deterministically and crash the per-container FUSE server.
+
 ## [0.7.0] - 2025-03-02
 ### Added
 * Port runc security patches for CVE-2025-3133, CVE-2025-52881, CVE-52565.
